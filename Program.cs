@@ -24,7 +24,6 @@ class Program
             {
                 (initialState, length, width) = LoadFromFile(args[0]);
                 steps = int.Parse(args[1]);
-                Console.WriteLine(DisplayState(initialState, length, width));
             }
 
             communicator.Broadcast(ref initialState, 0);
@@ -32,10 +31,12 @@ class Program
             communicator.Broadcast(ref width, 0);
             communicator.Broadcast(ref steps, 0);
 
+            var startTime = MPI.Environment.Time;
+
             var blockWidth = width / size;
 
             var currentBlock = new bool[(blockWidth + 2) * length];
-
+            
             for (var i = 0; i < blockWidth; i++)
             {
                 for (var j = 0; j < length; j++)
@@ -52,13 +53,8 @@ class Program
                 var topRank = (rank - 1 + size) % size;
                 var bottomRank = (rank + 1) % size;
 
-                //Console.WriteLine($"{rank}: sent top row to {topRank}");
                 communicator.SendReceive(localTop, topRank, 0, bottomRank, 0, out var topRow);
-                //Console.WriteLine($"{rank}: received top row: {string.Join("", topRow.Select(x => x ? "*" : "."))}");
-
-                //Console.WriteLine($"{rank}: sent bottom row to {bottomRank}");
                 communicator.SendReceive(localBot, bottomRank, 1, topRank, 1, out var bottomRow);
-                //Console.WriteLine($"{rank}: received bottom row: {string.Join("", bottomRow.Select(x => x ? "*" : "."))}");
 
                 for (var i = 0; i < length; i++)
                 {
@@ -69,23 +65,18 @@ class Program
                     currentBlock[(blockWidth + 1) * length + i] = topRow[i];
                 }
 
-                //Console.WriteLine($"{rank}: Local block before step performed\n{DisplayState(currentBlock, length, blockWidth + 2)}");
                 currentBlock = PerformStep(currentBlock, length, blockWidth + 2);
-                //Console.WriteLine($"{rank}: step {s + 1} performed\n{DisplayState(currentBlock, length, blockWidth + 2)}");
-
-                communicator.Barrier();
             }
+            var endTime = MPI.Environment.Time;
 
             var gathered = communicator.Gather(currentBlock, 0);
             communicator.Barrier();
 
             if (rank == 0)
             {
-                for(var i = 0; i < gathered.GetLength(0); i++)
-                {
-                    var subState = gathered[i].Skip(length).Take(length * blockWidth).ToArray();
-                    Console.Write(DisplayState(subState, length, blockWidth));
-                }
+                var terminateState = gathered.SelectMany(g => g.Skip(length).Take(length * blockWidth)).ToArray();
+                SaveToFile(terminateState, length, width, "output-1.txt");
+                Console.WriteLine(endTime -  startTime);
             }
         });
     }
