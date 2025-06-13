@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Http.Headers;
@@ -11,16 +12,22 @@ class Program
 {
     static void Main(string[] args)
     {
-        var steps = 4;
-        var (map, length, width) = LoadFromFile("state.txt");
-
+        var steps = 100;
+        var length = 1000;
+        var width = 1000;
+        var map = GetInitialConfiguration(length, width, new Random(), 100_000);
+        SaveToFile(map, length, width, "large_map.txt");
+        
+        var timer = new Stopwatch();
+        timer.Start();
         for (var i = 0; i < steps; i++)
         {
-            Console.Clear();
-            Console.WriteLine(DisplayState(map, length, width));
             map = PerformStep(map, length, width);
-            Thread.Sleep(1000);
         }
+        timer.Stop();
+        Console.WriteLine(timer.ElapsedMilliseconds);
+
+        SaveToFile(map, length, width, "output.txt");
     }
 
     public static bool[] PerformStep(bool[] map, int length, int width)
@@ -78,11 +85,9 @@ class Program
                 {
                     continue;
                 }
-                var u = i + dx >= 0 ? (i + dx) % width : i + dx + width;
-                var v = j + dy >= 0 ? (j + dy) % length : j + dy + length;
-                //var u = i + dx;
-                //var v = j + dy;
-                if (u >= 0 && u < width && v >= 0 && v < length && map[u * length + v])
+                var u = i + dx >= 0 ? (i + dx) % width : (i + dx + width) % width;
+                var v = j + dy >= 0 ? (j + dy) % length : (j + dy + length) % length;
+                if (map[u * length + v])
                 {
                     alives++;
                 }
@@ -106,7 +111,7 @@ class Program
             {
                 for(var j = 0; j < length; j++)
                 {
-                    if (lines[i][j] != ' ')
+                    if (lines[i][j] == '*')
                         map[i * length + j] = true;
                 }
             }
